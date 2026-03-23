@@ -1,0 +1,156 @@
+﻿@using Umbraco.Cms.Web.Common.PublishedModels;
+@using Umbraco.Cms.Core.Models
+@inherits Umbraco.Cms.Web.Common.Views.UmbracoViewPage<ContentModels.ContentPage>
+@using ContentModels = Umbraco.Cms.Web.Common.PublishedModels;
+
+@{
+    Layout = "master.cshtml";
+    var featuredImage = Model.FeaturedImage;
+    var aiResponse = TempData["AiResponse"] as string;
+    var userPrompt = TempData["UserPrompt"] as string;
+    string imageUrl = null;
+    if (featuredImage is MediaWithCrops media)
+    {
+        imageUrl = media.Url();
+    }
+}
+
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+
+<style>
+
+    #wrapper.divided {
+        overflow-x: hidden;
+    }
+
+    section.wrapper.style1 {
+        min-height: unset !important;
+        padding: 8rem 0 !important;
+        margin: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        box-sizing: border-box;
+    }
+
+    .content-page-wrapper {
+        font-family: 'DM Sans', sans-serif;
+        padding: 1.5rem 2rem;
+        max-width: 900px;
+        margin: 0 auto;
+        box-sizing: border-box;
+    }
+
+    .page-header {
+        display: flex;
+        align-items: flex-start;
+        gap: 2rem;
+        margin-bottom: 2.5rem;
+    }
+
+    .page-featured-image {
+        width: 200px;
+        height: 120px;
+        object-fit: cover;
+        border-radius: 12px;
+        flex-shrink: 0;
+    }
+
+    .page-header-text h1 {
+        font-family: 'DM Sans', sans-serif;
+        font-size: 2.8rem;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+        line-height: 1.1;
+        margin: 0 0 0.5rem 0;
+    }
+
+    .page-header-text p {
+        font-size: 1.1rem;
+        font-weight: 300;
+        opacity: 0.75;
+        margin: 0;
+        line-height: 1.6;
+    }
+
+    .ai-chat-box {
+        background: rgba(0,0,0,0.04);
+        border: 1px solid rgba(0,0,0,0.12);
+        border-radius: 12px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .ai-message {
+        padding: 0.75rem 1rem;
+        border-radius: 8px;
+        margin-bottom: 0.75rem;
+        line-height: 1.6;
+        font-size: 1rem;
+        font-weight: 400;
+    }
+
+    .user-message { background: rgba(0,0,0,0.05); }
+    .bot-message  { background: rgba(71, 211, 229, 0.1); }
+
+    .ai-input-row {
+        display: flex;
+        gap: 0.75rem;
+    }
+
+    .ai-input {
+        flex: 1;
+        padding: 0.75rem 1rem;
+        border-radius: 8px;
+        border: 1px solid rgba(0,0,0,0.2);
+        background: transparent;
+        font-family: 'DM Sans', sans-serif;
+        font-size: 1rem;
+        font-weight: 300;
+        outline: none;
+        transition: border-color 0.2s;
+    }
+
+    .ai-input:focus {
+        border-color: #47D3E5;
+        box-shadow: 0 0 0 2px rgba(71,211,229,0.2);
+    }
+
+</style>
+
+<section class="wrapper style1 align-center">
+    <div class="content-page-wrapper">
+
+        <div class="page-header">
+            @if (imageUrl != null)
+            {
+                <img src="@imageUrl" alt="@Model.Name" class="page-featured-image" />
+            }
+            <div class="page-header-text">
+                <h1>@Model.Name</h1>
+                <p>@Model.MainContent</p>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrEmpty(aiResponse))
+        {
+            <div class="ai-chat-box">
+                <div class="ai-message user-message">
+                    <strong>You:</strong> @userPrompt
+                </div>
+                <div class="ai-message bot-message">
+                    <strong>AI:</strong> @Html.Raw(aiResponse)
+                </div>
+            </div>
+        }
+
+        <form method="post" action="/umbraco/surface/AiSearch/Ask">
+            @Html.AntiForgeryToken()
+            <div class="ai-input-row">
+                <input type="text" name="prompt" placeholder="Ask me anything..."
+                       class="ai-input" autocomplete="off" />
+                <button type="submit" class="button primary">Send</button>
+            </div>
+        </form>
+
+    </div>
+</section>
