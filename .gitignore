@@ -480,3 +480,23 @@ umbraco-package-schema.json
 
 # Media files
 /wwwroot/media/
+
+# Build output
+bin/
+obj/
+
+# Umbraco
+umbraco/Data/
+umbraco/Logs/
+*.sqlite
+*.db
+
+# User secrets / sensitive
+appsettings.Development.json
+
+# macOS
+.DS_Store
+
+# Visual Studio / Rider
+.vs/
+*.user
