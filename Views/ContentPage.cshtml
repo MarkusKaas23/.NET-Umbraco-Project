@@ -1,18 +1,35 @@
-﻿@using Umbraco.Cms.Web.Common.PublishedModels;
+@using Umbraco.Cms.Web.Common.PublishedModels;
 @using Umbraco.Cms.Core.Models
+@using Markdig
+@using MyCustomUmbracoProject.Models
+@using MyCustomUmbracoProject.Services
 @inherits Umbraco.Cms.Web.Common.Views.UmbracoViewPage<ContentModels.ContentPage>
 @using ContentModels = Umbraco.Cms.Web.Common.PublishedModels;
+@inject ChatHistoryService ChatHistory
 
 @{
     Layout = "master.cshtml";
     var featuredImage = Model.FeaturedImage;
-    var aiResponse = TempData["AiResponse"] as string;
-    var userPrompt = TempData["UserPrompt"] as string;
     string imageUrl = null;
     if (featuredImage is MediaWithCrops media)
     {
         imageUrl = media.Url();
     }
+
+    var sessionId = Context.Request.Cookies["chatSessionId"];
+    var userId    = Context.Request.Cookies["chatUserId"];
+    var history   = sessionId != null
+        ? ChatHistory.GetBySession(sessionId)
+        : new List<ChatMessage>();
+
+    var pastSessions = userId != null
+        ? ChatHistory.GetAllSessions(userId)
+        : new List<ChatSessionSummary>();
+
+    var selectedModel = TempData["SelectedModel"] as string ?? "mistral-small-latest";
+    var aiError = TempData["AiError"] as string;
+    var selectSmall = selectedModel == "mistral-small-latest";
+    var selectLarge = selectedModel == "mistral-large-latest";
 }
 
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
@@ -35,10 +52,170 @@
     .content-page-wrapper {
         font-family: 'DM Sans', sans-serif;
         padding: 1.5rem 2rem;
-        max-width: 900px;
+        max-width: 1100px;
         margin: 0 auto;
         box-sizing: border-box;
     }
+
+    /* ── Fixed sidebar ───────────────────────────────────────── */
+    .chat-sidebar-wrap {
+        position: fixed;
+        top: 0;
+        left: 0;
+        height: 100vh;
+        width: 260px;
+        background: #f7f7f7;
+        border-right: 1px solid rgba(0,0,0,0.08);
+        box-shadow: 2px 0 12px rgba(0,0,0,0.06);
+        z-index: 900;
+        transform: translateX(0);
+        transition: transform 0.25s ease;
+        overflow-y: auto;
+        padding: 1.25rem 1rem;
+        box-sizing: border-box;
+        font-family: 'DM Sans', sans-serif;
+    }
+    .chat-sidebar-wrap.collapsed {
+        transform: translateX(-100%);
+    }
+
+    .sidebar-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.25);
+        z-index: 899;
+    }
+    .sidebar-overlay.visible { display: block; }
+
+    .chat-sidebar-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 1rem;
+    }
+
+    .chat-sidebar-title {
+        font-size: 0.7rem;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        opacity: 0.45;
+        margin: 0;
+    }
+
+    /* Fixed toggle button — always top-left, independent of page content */
+    /* Single toggle button — slides with the sidebar */
+    .btn-sidebar-fixed {
+        position: fixed;
+        top: 1.1rem;
+        left: 1.1rem;
+        z-index: 901;
+        background: rgba(255,255,255,0.9);
+        backdrop-filter: blur(6px);
+        border: 1px solid rgba(0,0,0,0.12);
+        border-radius: 8px;
+        height: 36px;
+        padding: 0 0.75rem 0 0.6rem;
+        gap: 0.4rem;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+        font-family: 'DM Sans', sans-serif;
+        font-size: 0.85rem;
+        font-weight: 500;
+        white-space: nowrap;
+        /* slides right when sidebar opens */
+        transition: left 0.25s ease, background 0.15s;
+    }
+    .btn-sidebar-fixed.open {
+        left: 270px;   /* 260px sidebar + 10px gap */
+    }
+    .btn-sidebar-fixed:hover { background: rgba(255,255,255,1); }
+    .btn-sidebar-fixed svg   { width: 17px; height: 17px; flex-shrink: 0; }
+
+    .btn-new-chat {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        padding: 0.6rem 1rem;
+        border-radius: 8px;
+        border: 1px solid rgba(0,0,0,0.18);
+        background: transparent;
+        font-family: 'DM Sans', sans-serif;
+        font-size: 0.9rem;
+        font-weight: 500;
+        cursor: pointer;
+        margin-bottom: 1rem;
+        transition: background 0.15s;
+        text-align: center;
+        white-space: nowrap;
+    }
+    .btn-new-chat:hover { background: rgba(0,0,0,0.05); }
+
+    .session-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.15rem;
+    }
+
+    /* Each session row: load button + delete button side by side */
+    .session-item {
+        display: flex;
+        align-items: center;
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    .session-item:hover { background: rgba(0,0,0,0.05); }
+    .session-item.active { background: rgba(71,211,229,0.15); }
+
+    .session-load-form { flex: 1; min-width: 0; }
+
+    .session-btn {
+        display: block !important;
+        width: 100% !important;
+        padding: 0.5rem 0.6rem !important;
+        border: none !important;
+        border-radius: 0 !important;
+        background: transparent !important;
+        font-family: 'DM Sans', sans-serif !important;
+        font-size: 0.85rem !important;
+        text-align: left !important;
+        cursor: pointer !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        font-weight: 400 !important;
+        box-shadow: none !important;
+        letter-spacing: normal !important;
+        text-transform: none !important;
+        min-width: 0 !important;
+    }
+    .session-item.active .session-btn { font-weight: 500 !important; }
+
+    .session-delete-form { flex-shrink: 0; }
+
+    .session-delete-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 26px;
+        height: 26px;
+        margin-right: 0.3rem;
+        border: none;
+        background: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 1rem;
+        opacity: 0;
+        color: inherit;
+        transition: opacity 0.15s, background 0.15s;
+    }
+    .session-item:hover .session-delete-btn { opacity: 0.45; }
+    .session-delete-btn:hover { opacity: 1 !important; background: rgba(220,53,69,0.15); }
 
     .page-header {
         display: flex;
@@ -77,20 +254,54 @@
         border: 1px solid rgba(0,0,0,0.12);
         border-radius: 12px;
         padding: 1.5rem;
-        margin-bottom: 1.5rem;
+        margin-bottom: 1rem;
+        max-height: 520px;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+
+    .ai-chat-box:empty {
+        display: none;
     }
 
     .ai-message {
         padding: 0.75rem 1rem;
         border-radius: 8px;
-        margin-bottom: 0.75rem;
         line-height: 1.6;
         font-size: 1rem;
         font-weight: 400;
     }
 
+    .ai-message p:last-child { margin-bottom: 0; }
+
     .user-message { background: rgba(0,0,0,0.05); }
     .bot-message  { background: rgba(71, 211, 229, 0.1); }
+
+    .message-meta {
+        font-size: 0.75rem;
+        opacity: 0.45;
+        margin-bottom: 0.3rem;
+    }
+
+    .ai-error {
+        background: rgba(220, 53, 69, 0.1);
+        border: 1px solid rgba(220, 53, 69, 0.3);
+        border-radius: 8px;
+        padding: 0.75rem 1rem;
+        margin-bottom: 1rem;
+        font-size: 0.95rem;
+    }
+
+    .ai-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 0.75rem;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
 
     .ai-input-row {
         display: flex;
@@ -99,6 +310,7 @@
 
     .ai-input {
         flex: 1;
+        min-width: 0;
         padding: 0.75rem 1rem;
         border-radius: 8px;
         border: 1px solid rgba(0,0,0,0.2);
@@ -115,7 +327,94 @@
         box-shadow: 0 0 0 2px rgba(71,211,229,0.2);
     }
 
+    .model-select {
+        flex-shrink: 0;
+        width: fit-content;
+        padding: 0.5rem 0.75rem;
+        border-radius: 8px;
+        border: 1px solid rgba(0,0,0,0.2);
+        background: transparent;
+        font-family: 'DM Sans', sans-serif;
+        font-size: 0.9rem;
+        cursor: pointer;
+    }
+
+    .ai-input-row .button {
+        flex-shrink: 0;
+        white-space: nowrap;
+        padding: 0.75rem 1.5rem;
+        text-align: center;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .btn-clear {
+        background: none;
+        border: 1px solid rgba(0,0,0,0.2);
+        border-radius: 8px;
+        padding: 0.5rem 0.9rem;
+        font-family: 'DM Sans', sans-serif;
+        font-size: 0.85rem;
+        cursor: pointer;
+        opacity: 0.6;
+        transition: opacity 0.2s;
+        text-align: center;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .btn-clear:hover { opacity: 1; }
+
 </style>
+
+@* Fixed sidebar — lives outside the page content flow *@
+<div class="chat-sidebar-wrap" id="chatSidebarWrap">
+    <div class="chat-sidebar-header">
+        <p class="chat-sidebar-title">Your chats</p>
+    </div>
+
+    <form method="post" action="/umbraco/surface/AiSearch/NewChat">
+        @Html.AntiForgeryToken()
+        <button type="submit" class="btn-new-chat">+ New chat</button>
+    </form>
+
+    @if (pastSessions.Any())
+    {
+        <div class="session-list">
+            @foreach (var s in pastSessions)
+            {
+                var isActive = s.SessionId == sessionId;
+                var title = s.Title.Length > 35 ? s.Title.Substring(0, 35) + "…" : s.Title;
+                <div class="session-item @(isActive ? "active" : "")">
+                    <form class="session-load-form" method="post" action="/umbraco/surface/AiSearch/LoadSession">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="sessionId" value="@s.SessionId" />
+                        <button type="submit" class="session-btn" title="@s.Title">@title</button>
+                    </form>
+                    <form class="session-delete-form" method="post" action="/umbraco/surface/AiSearch/DeleteSession"
+                          onsubmit="return confirm('Delete this chat?')">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="sessionId" value="@s.SessionId" />
+                        <button type="submit" class="session-delete-btn" title="Delete chat">&#x2715;</button>
+                    </form>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@* Overlay — dims the page when sidebar is open *@
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+@* Fixed toggle button — always top-left, independent of all other content *@
+<button class="btn-sidebar-fixed" id="sidebarToggleFixed" title="Toggle chat history">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/>
+    </svg>
+    Chats
+</button>
 
 <section class="wrapper style1 align-center">
     <div class="content-page-wrapper">
@@ -131,26 +430,69 @@
             </div>
         </div>
 
-        @if (!string.IsNullOrEmpty(aiResponse))
+        @if (!string.IsNullOrEmpty(aiError))
         {
-            <div class="ai-chat-box">
-                <div class="ai-message user-message">
-                    <strong>You:</strong> @userPrompt
-                </div>
-                <div class="ai-message bot-message">
-                    <strong>AI:</strong> @Html.Raw(aiResponse)
-                </div>
+            <div class="ai-error">@aiError</div>
+        }
+
+        @if (history.Any())
+        {
+            <div class="ai-chat-box" id="chatBox">
+                @foreach (var msg in history)
+                {
+                    <div class="ai-message user-message">
+                        <div class="message-meta">You &middot; @msg.CreatedAt.ToLocalTime().ToString("HH:mm")</div>
+                        @msg.UserPrompt
+                    </div>
+                    <div class="ai-message bot-message">
+                        <div class="message-meta">AI &middot; @msg.AiModel &middot; @msg.CreatedAt.ToLocalTime().ToString("HH:mm")</div>
+                        @Html.Raw(Markdown.ToHtml(msg.ResponseMarkdown))
+                    </div>
+                }
             </div>
         }
 
-        <form method="post" action="/umbraco/surface/AiSearch/Ask">
-            @Html.AntiForgeryToken()
-            <div class="ai-input-row">
-                <input type="text" name="prompt" placeholder="Ask me anything..."
-                       class="ai-input" autocomplete="off" />
-                <button type="submit" class="button primary">Send</button>
-            </div>
-        </form>
+        <div class="ai-toolbar">
+            <form method="post" action="/umbraco/surface/AiSearch/Ask" style="flex:1">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="model" value="@selectedModel" />
+                <div class="ai-input-row">
+                    <select class="model-select" onchange="this.form.querySelector('[name=model]').value=this.value">
+                        <option value="mistral-small-latest" selected="@selectSmall">Mistral Small</option>
+                        <option value="mistral-large-latest" selected="@selectLarge">Mistral Large</option>
+                    </select>
+                    <input type="text" name="prompt" placeholder="Ask me anything..."
+                           class="ai-input" autocomplete="off" />
+                    <button type="submit" class="button primary">Send</button>
+                </div>
+            </form>
+        </div>
 
     </div>
 </section>
+
+<script>
+    // Auto-scroll chat box to bottom on load
+    var chatBox = document.getElementById('chatBox');
+    if (chatBox) chatBox.scrollTop = chatBox.scrollHeight;
+
+    // Sidebar toggle
+    var wrap    = document.getElementById('chatSidebarWrap');
+    var overlay = document.getElementById('sidebarOverlay');
+    var btn     = document.getElementById('sidebarToggleFixed');
+
+    function setSidebar(open) {
+        wrap.classList.toggle('collapsed', !open);
+        overlay.classList.toggle('visible', open);
+        btn.classList.toggle('open', open);
+        localStorage.setItem('chatSidebarOpen', open ? '1' : '0');
+    }
+
+    // Restore saved state (default: closed)
+    var saved = localStorage.getItem('chatSidebarOpen');
+    setSidebar(saved === '1');
+
+    // Single button toggles both ways
+    btn.addEventListener('click',     function() { setSidebar(wrap.classList.contains('collapsed')); });
+    overlay.addEventListener('click', function() { setSidebar(false); });
+</script>

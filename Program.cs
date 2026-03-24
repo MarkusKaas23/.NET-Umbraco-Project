@@ -1,5 +1,6 @@
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
+builder.Services.AddSingleton<MyCustomUmbracoProject.Services.ChatHistoryService>();
 
 builder.CreateUmbracoBuilder()
     .AddBackOffice()
