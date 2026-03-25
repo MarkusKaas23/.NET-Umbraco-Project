@@ -1,0 +1,221 @@
+﻿@using Umbraco.Cms.Web.Common.PublishedModels;
+@using Umbraco.Cms.Core.Models
+@using Umbraco.Extensions
+@inherits Umbraco.Cms.Web.Common.Views.UmbracoViewPage<ContentModels.NewsListPage>
+@using ContentModels = Umbraco.Cms.Web.Common.PublishedModels;
+@{
+    Layout = "master.cshtml";
+
+    // Grab all published News Item children, sorted newest first
+    var newsItems = Model.Children
+        .Where(x => x.ContentType.Alias == "newsItem")
+        .OrderByDescending(x => x.Value<DateTime>("publishDate"))
+        .ToList();
+}
+
+<style>
+    .news-list-section {
+        padding: 6rem 2rem 4rem 2rem;
+        max-width: 1200px;
+        margin: 0 auto;
+        font-family: 'DM Sans', sans-serif;
+    }
+
+    .news-list-title {
+        font-size: 2.8rem;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+        margin-bottom: 0.5rem;
+    }
+
+    .news-list-subtitle {
+        font-size: 1.1rem;
+        font-weight: 300;
+        opacity: 0.65;
+        margin-bottom: 3rem;
+    }
+
+    .news-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1.5rem;
+    }
+
+    @* 2 columns on medium screens *@
+    @@media (max-width: 980px) {
+        .news-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+
+    @* 1 column on mobile *@
+    @@media (max-width: 600px) {
+        .news-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    .news-card {
+        background: #fff;
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+        text-decoration: none;
+        color: inherit;
+        display: flex;
+        flex-direction: column;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .news-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+        color: inherit;
+        text-decoration: none;
+    }
+
+    .news-card-image {
+        width: 100%;
+        height: 200px;
+        object-fit: cover;
+        display: block;
+        background: #e8dcc8;
+    }
+
+    .news-card-image-placeholder {
+        width: 100%;
+        height: 200px;
+        background: linear-gradient(135deg, #f4e8d3, #e8d5b5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: rgba(0,0,0,0.2);
+        font-size: 2rem;
+    }
+
+    .news-card-body {
+        padding: 1.25rem 1.5rem 1.5rem;
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+    }
+
+    .news-card-date {
+        font-size: 0.75rem;
+        font-weight: 500;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        opacity: 0.45;
+        margin-bottom: 0.5rem;
+    }
+
+    .news-card-headline {
+        font-size: 1.15rem;
+        font-weight: 600;
+        line-height: 1.35;
+        margin-bottom: 0.6rem;
+        color: #000;
+    }
+
+    .news-card-summary {
+        font-size: 0.92rem;
+        font-weight: 300;
+        line-height: 1.6;
+        opacity: 0.7;
+        flex: 1;
+        margin-bottom: 1rem;
+    }
+
+    .news-card-readmore {
+        font-size: 0.8rem;
+        font-weight: 500;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: #47D3E5;
+    }
+
+    .news-empty {
+        opacity: 0.5;
+        font-size: 1rem;
+        font-weight: 300;
+    }
+
+    section.wrapper.style1 {
+        min-width: 0 !important;
+        overflow-x: hidden !important;
+        display: block !important;
+        height: auto !important;
+        min-height: 0 !important;
+        padding: 0 !important;
+    }
+
+    section.wrapper.style1 > .inner {
+        display: block !important;
+        height: auto !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        padding: 0 !important;
+    }
+
+    body {
+        overflow-x: hidden !important;
+    }
+</style>
+
+<section class="wrapper style1">
+    <div class="news-list-section">
+
+        <h1 class="news-list-title">@Model.Name</h1>
+        <p class="news-list-subtitle">The latest updates and stories.</p>
+
+@if (!newsItems.Any())
+        {
+            <p class="news-empty">No news items published yet.</p>
+        }
+        else
+        {
+            <div class="news-grid">
+                @foreach (var item in newsItems)
+                {
+                    var headline  = item.Value<string>("headline") ?? item.Name;
+                    var summary   = item.Value<string>("summary") ?? "";
+                    var pubDate   = item.Value<DateTime>("publishDate");
+                    var image     = item.Value<MediaWithCrops>("newsImage");
+                    var imageUrl  = image?.Url() ?? null;
+
+                    // Trim summary to ~120 chars for the card
+                    var shortSummary = summary.Length > 120
+                        ? summary.Substring(0, 120).TrimEnd() + "…"
+                        : summary;
+
+                    <a href="@item.Url()" class="news-card">
+
+                        @if (imageUrl != null)
+                        {
+                            <img src="@imageUrl" alt="@headline" class="news-card-image" />
+                        }
+                        else
+                        {
+                            <div class="news-card-image-placeholder">✦</div>
+                        }
+
+                        <div class="news-card-body">
+                            @if (pubDate != default)
+                            {
+                                <div class="news-card-date">@pubDate.ToString("d MMM yyyy")</div>
+                            }
+                            <div class="news-card-headline">@headline</div>
+                            @if (!string.IsNullOrEmpty(shortSummary))
+                            {
+                                <div class="news-card-summary">@shortSummary</div>
+                            }
+                            <span class="news-card-readmore">Read more →</span>
+                        </div>
+
+                    </a>
+                }
+            </div>
+        }
+
+    </div>
+</section>

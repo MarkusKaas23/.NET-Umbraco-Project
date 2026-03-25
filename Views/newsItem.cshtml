@@ -1,0 +1,107 @@
+﻿@using Umbraco.Cms.Web.Common.PublishedModels;
+@using Umbraco.Cms.Core.Models
+@using Umbraco.Cms.Core.Strings
+@using Markdig
+@using Umbraco.Extensions
+@inherits Umbraco.Cms.Web.Common.Views.UmbracoViewPage<ContentModels.NewsItem>
+@using ContentModels = Umbraco.Cms.Web.Common.PublishedModels;
+@{
+    Layout = "master.cshtml";
+
+    var headline    = Model.Value<string>("headline") ?? Model.Name;
+    var bodyContent = Model.Value<IHtmlEncodedString>("bodyContent");
+    var pubDate     = Model.Value<DateTime>("publishDate");
+    var image       = Model.Value<MediaWithCrops>("newsImage");
+    var imageUrl    = image?.Url() ?? null;
+
+    // Link back to the parent News List Page
+    var parentUrl   = Model.Parent?.Url() ?? "/";
+    var parentName  = Model.Parent?.Name ?? "News";
+}
+
+<style>
+    .news-item-section {
+        padding: 6rem 2rem 4rem 2rem;
+        max-width: 820px;
+        margin: 0 auto;
+        font-family: 'DM Sans', sans-serif;
+    }
+
+    .news-back-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        font-size: 0.85rem;
+        font-weight: 500;
+        opacity: 0.55;
+        text-decoration: none;
+        color: inherit;
+        margin-bottom: 2rem;
+        transition: opacity 0.15s;
+    }
+    .news-back-link:hover { opacity: 1; color: #47D3E5; }
+
+    .news-item-image {
+        width: 100%;
+        max-height: 420px;
+        object-fit: cover;
+        border-radius: 12px;
+        margin-bottom: 2rem;
+        display: block;
+    }
+
+    .news-item-date {
+        font-size: 0.78rem;
+        font-weight: 500;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+        opacity: 0.4;
+        margin-bottom: 0.75rem;
+    }
+
+    .news-item-headline {
+        font-size: 2.6rem;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+        line-height: 1.15;
+        margin-bottom: 2rem;
+    }
+
+    .news-item-body {
+        font-size: 1.05rem;
+        font-weight: 300;
+        line-height: 1.8;
+    }
+
+    .news-item-body p { margin-bottom: 1.4rem; }
+    .news-item-body p:last-child { margin-bottom: 0; }
+    .news-item-body h2 { font-size: 1.5rem; font-weight: 600; margin: 2rem 0 0.75rem; }
+    .news-item-body h3 { font-size: 1.2rem; font-weight: 600; margin: 1.5rem 0 0.5rem; }
+</style>
+
+<section class="wrapper style1">
+    <div class="news-item-section">
+
+        <a href="@parentUrl" class="news-back-link">← @parentName</a>
+
+        @if (imageUrl != null)
+        {
+            <img src="@imageUrl" alt="@headline" class="news-item-image" />
+        }
+
+        @if (pubDate != default)
+        {
+            <div class="news-item-date">@pubDate.ToString("d MMM yyyy")</div>
+        }
+
+        <h1 class="news-item-headline">@headline</h1>
+
+        @if (bodyContent != null)
+        {
+            <div class="news-item-body">
+                @Html.Raw(bodyContent.ToHtmlString())
+            </div>
+        }
+
+    </div>
+</section>
