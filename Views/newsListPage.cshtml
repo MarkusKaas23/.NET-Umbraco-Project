@@ -6,6 +6,10 @@
 @{
     Layout = "master.cshtml";
 
+    var subtitle = Model.Value<string>("subtitle") ?? "The latest updates and stories.";
+    var listImage = Model.NewsListImage;
+    var listImageUrl = listImage?.Url();
+
     // Grab all published News Item children, sorted newest first
     var newsItems = Model.Children
         .Where(x => x.ContentType.Alias == "newsItem")
@@ -19,6 +23,16 @@
         max-width: 1200px;
         margin: 0 auto;
         font-family: 'DM Sans', sans-serif;
+    }
+
+    .news-list-image {
+        width: 100%;
+        max-height: 240px;
+        max-width: 240px;
+        object-fit: cover;
+        border-radius: 6px;
+        margin: 0 auto 2rem auto;
+        display: block;
     }
 
     .news-list-title {
@@ -165,8 +179,12 @@
 <section class="wrapper style1">
     <div class="news-list-section">
 
+        @if (listImageUrl != null)
+        {
+            <img src="@listImageUrl" alt="@Model.Name" class="news-list-image" />
+        }
         <h1 class="news-list-title">@Model.Name</h1>
-        <p class="news-list-subtitle">The latest updates and stories.</p>
+        <p class="news-list-subtitle">@subtitle</p>
 
 @if (!newsItems.Any())
         {
