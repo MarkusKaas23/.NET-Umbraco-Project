@@ -30,6 +30,8 @@
     var aiError = TempData["AiError"] as string;
     var selectSmall = selectedModel == "mistral-small-latest";
     var selectLarge = selectedModel == "mistral-large-latest";
+
+    var pageLinkAboutContent = Model.PageLinkAbout;
 }
 
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
@@ -57,6 +59,36 @@
         box-sizing: border-box;
     }
 
+    /* ── About button top-right ───────────────────────────── */
+    .btn-about-fixed {
+        position: fixed;
+        top: 1.1rem;
+        right: 1.1rem;
+        z-index: 901;
+        background: #f4e8d3 !important;
+        border: 1px solid rgba(0,0,0,0.12);
+        border-radius: 8px;
+        height: 36px;
+        padding: 0 1rem;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+        font-family: 'DM Sans', sans-serif;
+        font-size: 0.85rem;
+        font-weight: 500;
+        text-decoration: none;
+        color: #000 !important;
+        white-space: nowrap;
+        transition: background 0.15s, box-shadow 0.15s;
+    }
+    .btn-about-fixed:hover {
+        background: rgba(255,255,255,1) !important;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        color: #47D3E5 !important;
+    }
+
     /* ── Fixed sidebar ───────────────────────────────────────── */
     .chat-sidebar-wrap {
         position: fixed;
@@ -64,7 +96,7 @@
         left: 0;
         height: 100vh;
         width: 260px;
-        background: #f7f7f7;
+        background: #f3e6cf !important;
         border-right: 1px solid rgba(0,0,0,0.08);
         box-shadow: 2px 0 12px rgba(0,0,0,0.06);
         z-index: 900;
@@ -104,14 +136,12 @@
         margin: 0;
     }
 
-    /* Fixed toggle button — always top-left, independent of page content */
-    /* Single toggle button — slides with the sidebar */
     .btn-sidebar-fixed {
         position: fixed;
         top: 1.1rem;
         left: 1.1rem;
         z-index: 901;
-        background: rgba(255,255,255,0.9);
+        background: #f4e8d3 !important;
         backdrop-filter: blur(6px);
         border: 1px solid rgba(0,0,0,0.12);
         border-radius: 8px;
@@ -127,13 +157,12 @@
         font-size: 0.85rem;
         font-weight: 500;
         white-space: nowrap;
-        /* slides right when sidebar opens */
         transition: left 0.25s ease, background 0.15s;
     }
     .btn-sidebar-fixed.open {
-        left: 270px;   /* 260px sidebar + 10px gap */
+        left: 270px;
     }
-    .btn-sidebar-fixed:hover { background: rgba(255,255,255,1); }
+    .btn-sidebar-fixed:hover { background: rgba(255,255,255,1) !important; }
     .btn-sidebar-fixed svg   { width: 17px; height: 17px; flex-shrink: 0; }
 
     .btn-new-chat {
@@ -162,7 +191,6 @@
         gap: 0.15rem;
     }
 
-    /* Each session row: load button + delete button side by side */
     .session-item {
         display: flex;
         align-items: center;
@@ -199,20 +227,27 @@
     .session-delete-form { flex-shrink: 0; }
 
     .session-delete-btn {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 26px;
-        height: 26px;
-        margin-right: 0.3rem;
-        border: none;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        width: 26px !important;
+        height: 26px !important;
+        min-width: 26px !important;
+        max-width: 26px !important;
+        min-height: 26px !important;
+        max-height: 26px !important;
+        flex-shrink: 0 !important;
+        padding: 0 !important;
+        margin-right: 0.6rem;
+        border: none !important;
         background: none;
-        border-radius: 6px;
+        border-radius: 6px !important;
         cursor: pointer;
-        font-size: 1rem;
+        font-size: 0 !important;
         opacity: 0;
         color: inherit;
         transition: opacity 0.15s, background 0.15s;
+        box-sizing: border-box !important;
     }
     .session-item:hover .session-delete-btn { opacity: 0.45; }
     .session-delete-btn:hover { opacity: 1 !important; background: rgba(220,53,69,0.15); }
@@ -262,9 +297,7 @@
         gap: 0.75rem;
     }
 
-    .ai-chat-box:empty {
-        display: none;
-    }
+    .ai-chat-box:empty { display: none; }
 
     .ai-message {
         padding: 0.75rem 1rem;
@@ -346,12 +379,13 @@
         text-align: center;
         display: inline-flex;
         align-items: center;
+        color: #cf7011 !important;
         justify-content: center;
     }
 
     .btn-clear {
         background: none;
-        border: 1px solid rgba(0,0,0,0.2);
+        border: 1px solid rgba(27, 22, 22, 0.2);
         border-radius: 8px;
         padding: 0.5rem 0.9rem;
         font-family: 'DM Sans', sans-serif;
@@ -359,62 +393,15 @@
         cursor: pointer;
         opacity: 0.6;
         transition: opacity 0.2s;
-        text-align: center;
         display: inline-flex;
         align-items: center;
         justify-content: center;
     }
-
     .btn-clear:hover { opacity: 1; }
 
 </style>
 
-@* Fixed sidebar — lives outside the page content flow *@
-<div class="chat-sidebar-wrap" id="chatSidebarWrap">
-    <div class="chat-sidebar-header">
-        <p class="chat-sidebar-title">Your chats</p>
-    </div>
-
-    <form method="post" action="/umbraco/surface/AiSearch/NewChat">
-        @Html.AntiForgeryToken()
-        <button type="submit" class="btn-new-chat">+ New chat</button>
-    </form>
-
-    @if (pastSessions.Any())
-    {
-        <div class="session-list">
-            @foreach (var s in pastSessions)
-            {
-                var isActive = s.SessionId == sessionId;
-                var title = s.Title.Length > 35 ? s.Title.Substring(0, 35) + "…" : s.Title;
-                <div class="session-item @(isActive ? "active" : "")">
-                    <form class="session-load-form" method="post" action="/umbraco/surface/AiSearch/LoadSession">
-                        @Html.AntiForgeryToken()
-                        <input type="hidden" name="sessionId" value="@s.SessionId" />
-                        <button type="submit" class="session-btn" title="@s.Title">@title</button>
-                    </form>
-                    <form class="session-delete-form" method="post" action="/umbraco/surface/AiSearch/DeleteSession"
-                          onsubmit="return confirm('Delete this chat?')">
-                        @Html.AntiForgeryToken()
-                        <input type="hidden" name="sessionId" value="@s.SessionId" />
-                        <button type="submit" class="session-delete-btn" title="Delete chat">&#x2715;</button>
-                    </form>
-                </div>
-            }
-        </div>
-    }
-</div>
-
-@* Overlay — dims the page when sidebar is open *@
-<div class="sidebar-overlay" id="sidebarOverlay"></div>
-
-@* Fixed toggle button — always top-left, independent of all other content *@
-<button class="btn-sidebar-fixed" id="sidebarToggleFixed" title="Toggle chat history">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/>
-    </svg>
-    Chats
-</button>
+@* ── Page body (inside #wrapper) ─────────────────────────────── *@
 
 <section class="wrapper style1 align-center">
     <div class="content-page-wrapper">
@@ -472,27 +459,87 @@
 </section>
 
 <script>
-    // Auto-scroll chat box to bottom on load
     var chatBox = document.getElementById('chatBox');
     if (chatBox) chatBox.scrollTop = chatBox.scrollHeight;
+</script>
 
-    // Sidebar toggle
-    var wrap    = document.getElementById('chatSidebarWrap');
-    var overlay = document.getElementById('sidebarOverlay');
-    var btn     = document.getElementById('sidebarToggleFixed');
+@* ── Everything below renders OUTSIDE #wrapper via the master section ── *@
 
-    function setSidebar(open) {
-        wrap.classList.toggle('collapsed', !open);
-        overlay.classList.toggle('visible', open);
-        btn.classList.toggle('open', open);
-        localStorage.setItem('chatSidebarOpen', open ? '1' : '0');
+@section BodyOverlays {
+
+    @* About page link — fixed top-right *@
+    @if (pageLinkAboutContent != null)
+    {
+        <a href="@pageLinkAboutContent.Url()" class="btn-about-fixed">About</a>
     }
 
-    // Restore saved state (default: closed)
-    var saved = localStorage.getItem('chatSidebarOpen');
-    setSidebar(saved === '1');
+    @* Fixed sidebar *@
+    <div class="chat-sidebar-wrap" id="chatSidebarWrap">
+        <div class="chat-sidebar-header">
+            <p class="chat-sidebar-title">Your chats</p>
+        </div>
 
-    // Single button toggles both ways
-    btn.addEventListener('click',     function() { setSidebar(wrap.classList.contains('collapsed')); });
-    overlay.addEventListener('click', function() { setSidebar(false); });
-</script>
+        <form method="post" action="/umbraco/surface/AiSearch/NewChat">
+            @Html.AntiForgeryToken()
+            <button type="submit" class="btn-new-chat">+ New chat</button>
+        </form>
+
+        @if (pastSessions.Any())
+        {
+            <div class="session-list">
+                @foreach (var s in pastSessions)
+                {
+                    var isActive = s.SessionId == sessionId;
+                    var title = s.Title.Length > 35 ? s.Title.Substring(0, 35) + "…" : s.Title;
+                    <div class="session-item @(isActive ? "active" : "")">
+                        <form class="session-load-form" method="post" action="/umbraco/surface/AiSearch/LoadSession">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="sessionId" value="@s.SessionId" />
+                            <button type="submit" class="session-btn" title="@s.Title">@title</button>
+                        </form>
+                        <form class="session-delete-form" method="post" action="/umbraco/surface/AiSearch/DeleteSession"
+                              onsubmit="return confirm('Delete this chat?')">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="sessionId" value="@s.SessionId" />
+                            <button type="submit" class="session-delete-btn" title="Delete chat">
+                                <svg viewBox="0 0 10 10" width="10" height="10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                                    <line x1="1" y1="1" x2="9" y2="9"/><line x1="9" y1="1" x2="1" y2="9"/>
+                                </svg>
+                            </button>
+                        </form>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+
+    @* Overlay *@
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+    @* Sidebar toggle button *@
+    <button class="btn-sidebar-fixed" id="sidebarToggleFixed" title="Toggle chat history">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/>
+        </svg>
+        Chats
+    </button>
+
+    <script>
+        var wrap    = document.getElementById('chatSidebarWrap');
+        var overlay = document.getElementById('sidebarOverlay');
+        var btn     = document.getElementById('sidebarToggleFixed');
+
+        function setSidebar(open) {
+            wrap.classList.toggle('collapsed', !open);
+            overlay.classList.toggle('visible', open);
+            btn.classList.toggle('open', open);
+            localStorage.setItem('chatSidebarOpen', open ? '1' : '0');
+        }
+
+        var saved = localStorage.getItem('chatSidebarOpen');
+        setSidebar(saved === '1');
+
+        btn.addEventListener('click',     function() { setSidebar(wrap.classList.contains('collapsed')); });
+        overlay.addEventListener('click', function() { setSidebar(false); });
+    </script>
+}

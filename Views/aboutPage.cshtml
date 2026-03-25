@@ -1,0 +1,85 @@
+﻿@using Umbraco.Cms.Web.Common.PublishedModels;
+@using Umbraco.Cms.Core.Models
+@using Markdig
+@inherits Umbraco.Cms.Web.Common.Views.UmbracoViewPage<ContentModels.AboutPage>
+@using ContentModels = Umbraco.Cms.Web.Common.PublishedModels;
+@{
+    Layout = "master.cshtml";
+
+    var aboutImage = Model.AboutImage;
+    string imageUrl = null;
+    if (aboutImage is MediaWithCrops media)
+    {
+        imageUrl = media.Url();
+    }
+}
+
+<section class="wrapper style1 align-center">
+    <div class="content-page-wrapper">
+
+        <div class="page-header">
+            @if (imageUrl != null)
+            {
+                <img src="@imageUrl" alt="@Model.Name" class="page-featured-image" />
+            }
+            <div class="page-header-text">
+                <h1>@Model.Name</h1>
+            </div>
+        </div>
+
+        <div class="about-body">
+            @Html.Raw(Model.AboutContent?.ToHtmlString() ?? "")
+        </div>
+
+    </div>
+</section>
+
+<style>
+    section.wrapper.style1 {
+        min-height: unset !important;
+        padding: 8rem 0 !important;
+    }
+
+    .content-page-wrapper {
+        font-family: 'DM Sans', sans-serif;
+        padding: 1.5rem 2rem;
+        max-width: 1100px;
+        margin: 0 auto;
+        box-sizing: border-box;
+    }
+
+    .page-header {
+        display: flex;
+        align-items: flex-start;
+        gap: 2rem;
+        margin-bottom: 2.5rem;
+    }
+
+    .page-featured-image {
+        width: 200px;
+        height: 120px;
+        object-fit: cover;
+        border-radius: 12px;
+        flex-shrink: 0;
+    }
+
+    .page-header-text h1 {
+        font-family: 'DM Sans', sans-serif;
+        font-size: 2.8rem;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+        line-height: 1.1;
+        margin: 0;
+    }
+
+    .about-body {
+        font-family: 'DM Sans', sans-serif;
+        font-size: 1.05rem;
+        font-weight: 300;
+        line-height: 1.75;
+        max-width: 780px;
+    }
+
+    .about-body p { margin-bottom: 1.25rem; }
+    .about-body p:last-child { margin-bottom: 0; }
+</style>
