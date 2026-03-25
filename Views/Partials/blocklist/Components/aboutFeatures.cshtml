@@ -1,0 +1,16 @@
+@inherits Umbraco.Cms.Web.Common.Views.UmbracoViewPage<Umbraco.Cms.Core.Models.Blocks.BlockListItem>
+@using ContentModels = Umbraco.Cms.Web.Common.PublishedModels;
+@{
+    var content = (ContentModels.AboutFeatures)Model.Content;
+}
+
+<div class="about-feature">
+    @if (!string.IsNullOrEmpty(content.FeatureName))
+    {
+        <h3>@content.FeatureName</h3>
+    }
+    @if (!string.IsNullOrEmpty(content.FeatureDescription))
+    {
+        <p>@content.FeatureDescription</p>
+    }
+</div>

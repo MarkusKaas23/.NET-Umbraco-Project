@@ -1,0 +1,25 @@
+@inherits Umbraco.Cms.Web.Common.Views.UmbracoViewPage<Umbraco.Cms.Core.Models.Blocks.BlockListItem>
+@using ContentModels = Umbraco.Cms.Web.Common.PublishedModels;
+@{
+    var content = (ContentModels.DemoBlocks)Model.Content;
+    var imageUrl = content.Image?.Url();
+}
+
+<div class="demo-block">
+    @if (!string.IsNullOrEmpty(content.Headline))
+    {
+        <h3>@content.Headline</h3>
+    }
+    @if (imageUrl != null)
+    {
+        <img src="@imageUrl" alt="@content.Headline" />
+    }
+    @if (content.RichText1 != null)
+    {
+        @Html.Raw(content.RichText1.ToHtmlString())
+    }
+    @if (content.RichText2 != null)
+    {
+        @Html.Raw(content.RichText2.ToHtmlString())
+    }
+</div>

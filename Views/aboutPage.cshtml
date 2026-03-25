@@ -30,7 +30,9 @@
         <div class="about-body">
             @Html.Raw(Model.AboutContent?.ToHtmlString() ?? "")
         </div>
-
+        <div>
+        @Html.GetBlockListHtml(Model.AboutFeatures)
+        </div>
     </div>
 </section>
 

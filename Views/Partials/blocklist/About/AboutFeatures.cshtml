@@ -1,0 +1,11 @@
+﻿@inherits Umbraco.Cms.Web.Common.Views.UmbracoViewPage<Umbraco.Cms.Core.Models.Blocks.BlockListItem>;
+@using ContentModels = Umbraco.Cms.Web.Common.PublishedModels;
+@{
+    var content = (ContentModels.AboutFeatures)Model.Content;
+    // var settings = Model.Settings as ContentModels.MyElementTypeAliasOfContent; // Cast Model.Settings safely using 'as' to avoid null reference exceptions
+}
+
+<!--@* Output the value of field with alias 'heading' from the Element Type selected as Content section *@ -->
+
+<h1>@content.Value("featureName")</h1>
+<p>@content.FeatureDescription</p>
