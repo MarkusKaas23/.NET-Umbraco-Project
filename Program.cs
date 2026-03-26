@@ -13,13 +13,12 @@ WebApplication app = builder.Build();
 
 await app.BootUmbracoAsync();
 
-app.MapControllers();
-
 app.UseUmbraco()
     .WithMiddleware(u =>
     {
         u.UseBackOffice();
         u.UseWebsite();
+        u.AppBuilder.UseMiddleware<MyCustomUmbracoProject.Middleware.SitemapMiddleware>();
     })
     .WithEndpoints(u =>
     {
