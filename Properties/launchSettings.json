@@ -22,8 +22,10 @@
       "launchBrowser": true,
       "applicationUrl": "https://localhost:44358;http://localhost:12552",
       "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development"
-      }      
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "ConnectionStrings__umbracoDbDSN": "Server=localhost;Database=UmbracoDatabase;User Id=sa;Password=YourStrong!Passw0rd;TrustServerCertificate=true;",
+        "ConnectionStrings__umbracoDbDSN_ProviderName": "Microsoft.Data.SqlClient"
+      }
     }
   }
 }
