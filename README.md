@@ -7,6 +7,8 @@
 
 ## Run
 ```
+dotnet restore
+
 dotnet build
 
 dotnet run
