@@ -68,9 +68,10 @@ namespace MyCustomUmbracoProject.Services
         public List<ChatMessage> GetBySession(string sessionId, int limit = 20)
         {
             EnsureTable();
+            var safeLimit = Math.Clamp(limit, 1, 200);
             using var scope = _scopeProvider.CreateScope();
             var messages = scope.Database.Fetch<ChatMessage>(
-                $"SELECT TOP {limit} * FROM ChatMessages WHERE SessionId = @0 ORDER BY CreatedAt DESC",
+                $"SELECT TOP {safeLimit} * FROM ChatMessages WHERE SessionId = @0 ORDER BY CreatedAt DESC",
                 sessionId);
             scope.Complete();
             messages.Reverse();
