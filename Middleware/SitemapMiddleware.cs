@@ -21,42 +21,6 @@ namespace MyCustomUmbracoProject.Middleware
             IUmbracoContextFactory umbracoContextFactory,
             IContentService contentService)
         {
-         
-
-            // Debug endpoint
-            if (context.Request.Path.Equals("/sitemap-debug", StringComparison.OrdinalIgnoreCase))
-            {
-                using var ctx = umbracoContextFactory.EnsureUmbracoContext();
-                var cache = ctx.UmbracoContext.Content;
-                var sb = new StringBuilder();
-
-                sb.AppendLine($"Cache is null: {cache == null}");
-
-                var rootContent = contentService.GetRootContent().ToList();
-                sb.AppendLine($"Root nodes from ContentService: {rootContent.Count}");
-
-                foreach (var r in rootContent)
-                {
-                    sb.AppendLine($"  - [{r.Id}] {r.Name} (Published: {r.Published})");
-                    var published = await cache!.GetByIdAsync(r.Id);
-                    sb.AppendLine($"    Published cache hit: {published != null}");
-                    if (published != null)
-                    {
-                        sb.AppendLine($"    Url: {published.Url(mode: UrlMode.Absolute)}");
-                        foreach (var child in published.DescendantsOrSelf())
-                        {
-                            var url = child.Url(mode: UrlMode.Absolute);
-                            var excluded = child.Value<bool>("excludeFromSitemap");
-                            sb.AppendLine($"    Node [{child.Id}] {child.Name} | Url: {url} | Excluded: {excluded}");
-                        }
-                    }
-                }
-
-                context.Response.ContentType = "text/plain; charset=utf-8";
-                await context.Response.WriteAsync(sb.ToString(), Encoding.UTF8);
-                return;
-            }
-
             if (!context.Request.Path.Equals("/sitemap.xml", StringComparison.OrdinalIgnoreCase))
             {
                 await _next(context);
@@ -64,21 +28,17 @@ namespace MyCustomUmbracoProject.Middleware
             }
 
             using var umbracoContext = umbracoContextFactory.EnsureUmbracoContext();
-
-            var cache2 = umbracoContext.UmbracoContext.Content;
-            if (cache2 == null)
+            var contentCache = umbracoContext.UmbracoContext.Content;
+            if (contentCache == null)
             {
                 context.Response.StatusCode = 503;
                 return;
             }
 
-            var rootNodes = new List<IPublishedContent>();
-            foreach (var r in contentService.GetRootContent())
-            {
-                var published = await cache2.GetByIdAsync(r.Id);
-                if (published != null)
-                    rootNodes.Add(published);
-            }
+            var rootIds = contentService.GetRootContent().Select(r => r.Id);
+            var rootNodes = (await Task.WhenAll(rootIds.Select(id => contentCache.GetByIdAsync(id))))
+                .Where(n => n != null)
+                .Cast<IPublishedContent>();
 
             var allNodes = rootNodes.SelectMany(n => n.DescendantsOrSelf());
             var baseUrl = $"{context.Request.Scheme}://{context.Request.Host}";
@@ -133,7 +93,7 @@ namespace MyCustomUmbracoProject.Middleware
 
                 writer.WriteEndElement();
                 writer.WriteEndDocument();
-            } // writer is flushed and closed here, before sb.ToString()
+            }
 
             return sb.ToString();
         }
