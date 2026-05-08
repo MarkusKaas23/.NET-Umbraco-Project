@@ -1,19 +1,13 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
-using Microsoft.Extensions.Logging;
 using MyCustomUmbracoProject.Models;
 using MyCustomUmbracoProject.Services;
-using System;
-using System.Collections.Generic;
-using System.Net.Http;
+using System.Net;
 using System.Text;
 using System.Text.Json;
-using System.Threading.Tasks;
 
 namespace MyCustomUmbracoProject.Controllers
 {
-    /// Handles AI chat requests by forwarding prompts to the Mistral API
-    /// and returning the response to the content page.
     [Route("umbraco/surface/AiSearch")]
     public class AiSearchSurfaceController : Controller
     {
@@ -21,56 +15,53 @@ namespace MyCustomUmbracoProject.Controllers
         private readonly ILogger<AiSearchSurfaceController> _logger;
         private readonly IMemoryCache _cache;
         private readonly ChatHistoryService _chatHistory;
+        private readonly IHttpClientFactory _httpClientFactory;
 
         private const string SessionCookie = "chatSessionId";
         private const string UserCookie    = "chatUserId";
+        private const string MistralEndpoint = "https://api.mistral.ai/v1/chat/completions";
+        private const string DefaultModel = "mistral-small-latest";
+        private const string LargeModel   = "mistral-large-latest";
 
         public AiSearchSurfaceController(
             IConfiguration configuration,
             ILogger<AiSearchSurfaceController> logger,
             IMemoryCache cache,
-            ChatHistoryService chatHistory)
+            ChatHistoryService chatHistory,
+            IHttpClientFactory httpClientFactory)
         {
             _configuration = configuration;
             _logger = logger;
             _cache = cache;
             _chatHistory = chatHistory;
+            _httpClientFactory = httpClientFactory;
         }
 
-        /// Returns the persistent user ID cookie, creating one if needed.
-        private string GetOrCreateUserId()
+        private string GetOrCreateUserId() => GetOrCreateCookie(UserCookie, DateTimeOffset.UtcNow.AddYears(2));
+        private string GetOrCreateSessionId() => GetOrCreateCookie(SessionCookie, DateTimeOffset.UtcNow.AddDays(30));
+
+        private string GetOrCreateCookie(string name, DateTimeOffset expires)
         {
-            if (Request.Cookies.TryGetValue(UserCookie, out var existing) && !string.IsNullOrEmpty(existing))
+            if (Request.Cookies.TryGetValue(name, out var existing) && !string.IsNullOrEmpty(existing))
                 return existing;
 
             var newId = Guid.NewGuid().ToString("N");
-            Response.Cookies.Append(UserCookie, newId, new CookieOptions
-            {
-                Expires = DateTimeOffset.UtcNow.AddYears(2),
-                HttpOnly = true,
-                SameSite = SameSiteMode.Lax
-            });
+            SetCookie(name, newId, expires);
             return newId;
         }
 
-        /// Returns the session ID from the cookie, creating a new one if needed.
-        private string GetOrCreateSessionId()
+        private void SetCookie(string name, string value, DateTimeOffset expires)
         {
-            if (Request.Cookies.TryGetValue(SessionCookie, out var existing) && !string.IsNullOrEmpty(existing))
-                return existing;
-
-            var newId = Guid.NewGuid().ToString("N");
-            Response.Cookies.Append(SessionCookie, newId, new CookieOptions
+            Response.Cookies.Append(name, value, new CookieOptions
             {
-                Expires = DateTimeOffset.UtcNow.AddDays(30),
+                Expires = expires,
                 HttpOnly = true,
                 SameSite = SameSiteMode.Lax
             });
-            return newId;
         }
 
-        /// Receives a prompt, calls Mistral with full conversation context,
-        /// saves the exchange, and redirects back.
+        private IActionResult RedirectToReferer() => Redirect(Request.Headers.Referer.ToString());
+
         [HttpPost("Ask")]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Ask(string prompt, string model)
@@ -81,37 +72,26 @@ namespace MyCustomUmbracoProject.Controllers
             if (string.IsNullOrWhiteSpace(prompt))
             {
                 TempData["SelectedModel"] = model;
-                return Redirect(Request.Headers["Referer"].ToString());
+                return RedirectToReferer();
             }
 
-            var selectedModel = model == "mistral-large-latest"
-                ? "mistral-large-latest"
-                : "mistral-small-latest";
+            var selectedModel = model == LargeModel ? LargeModel : DefaultModel;
 
-            // Check cache — if this exact prompt+model was answered recently, reuse it
-            var cacheKey = $"{selectedModel}:{prompt.Trim().ToLower()}";
+            var cacheKey = $"{selectedModel}:{prompt.Trim().ToLowerInvariant()}";
             if (_cache.TryGetValue(cacheKey, out string? cachedMarkdown))
             {
                 _logger.LogInformation("Cache hit for prompt: {Prompt}", prompt);
-                _chatHistory.Save(new ChatMessage
-                {
-                    SessionId = sessionId,
-                    UserId    = userId,
-                    UserPrompt = prompt,
-                    ResponseMarkdown = cachedMarkdown!,
-                    AiModel = selectedModel
-                });
+                _chatHistory.Save(BuildMessage(sessionId, userId, prompt, cachedMarkdown!, selectedModel));
                 TempData["SelectedModel"] = selectedModel;
-                return Redirect(Request.Headers["Referer"].ToString());
+                return RedirectToReferer();
             }
 
             var apiKey = _configuration["MistralApiKey"]
                 ?? Environment.GetEnvironmentVariable("MISTRAL_API_KEY")
                 ?? throw new InvalidOperationException("No Mistral API key configured.");
 
-            // Build message array from history so the AI remembers the conversation
             var history = _chatHistory.GetBySession(sessionId, limit: 10);
-            var messages = new List<object>();
+            var messages = new List<object>(history.Count * 2 + 1);
             foreach (var msg in history)
             {
                 messages.Add(new { role = "user",      content = msg.UserPrompt });
@@ -119,32 +99,9 @@ namespace MyCustomUmbracoProject.Controllers
             }
             messages.Add(new { role = "user", content = prompt });
 
-            var requestBody = JsonSerializer.Serialize(new
-            {
-                model = selectedModel,
-                messages
-            });
+            var requestBody = JsonSerializer.Serialize(new { model = selectedModel, messages });
 
-            using var client = new HttpClient();
-            client.DefaultRequestHeaders.Add("Authorization", $"Bearer {apiKey}");
-
-            // Retry logic for rate limits
-            HttpResponseMessage response;
-            response = await client.PostAsync(
-                "https://api.mistral.ai/v1/chat/completions",
-                new StringContent(requestBody, Encoding.UTF8, "application/json")
-            );
-
-            if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
-            {
-                _logger.LogWarning("Rate limit hit, retrying after 2 seconds...");
-                await Task.Delay(2000);
-                response = await client.PostAsync(
-                    "https://api.mistral.ai/v1/chat/completions",
-                    new StringContent(requestBody, Encoding.UTF8, "application/json")
-                );
-            }
-
+            var response = await SendMistralRequest(apiKey, requestBody);
             var json = await response.Content.ReadAsStringAsync();
 
             if (!response.IsSuccessStatusCode)
@@ -152,97 +109,88 @@ namespace MyCustomUmbracoProject.Controllers
                 _logger.LogError("Mistral API error: {StatusCode} - {Body}", response.StatusCode, json);
                 TempData["AiError"] = $"API error: {response.StatusCode}";
                 TempData["SelectedModel"] = selectedModel;
-                return Redirect(Request.Headers["Referer"].ToString());
+                return RedirectToReferer();
             }
 
-            var doc = JsonDocument.Parse(json);
+            using var doc = JsonDocument.Parse(json);
             var answerMarkdown = doc.RootElement
                 .GetProperty("choices")[0]
                 .GetProperty("message")
                 .GetProperty("content")
                 .GetString() ?? "";
 
-            // Cache the raw markdown for 1 hour
             _cache.Set(cacheKey, answerMarkdown, TimeSpan.FromHours(1));
-
-            _chatHistory.Save(new ChatMessage
-            {
-                SessionId = sessionId,
-                UserId    = userId,
-                UserPrompt = prompt,
-                ResponseMarkdown = answerMarkdown,
-                AiModel = selectedModel
-            });
+            _chatHistory.Save(BuildMessage(sessionId, userId, prompt, answerMarkdown, selectedModel));
 
             _logger.LogInformation("Response saved for prompt: {Prompt}", prompt);
 
             TempData["SelectedModel"] = selectedModel;
-            return Redirect(Request.Headers["Referer"].ToString());
+            return RedirectToReferer();
         }
 
-        /// Starts a new chat session without deleting the current one.
+        private async Task<HttpResponseMessage> SendMistralRequest(string apiKey, string requestBody)
+        {
+            var client = _httpClientFactory.CreateClient();
+            client.DefaultRequestHeaders.Add("Authorization", $"Bearer {apiKey}");
+
+            var response = await PostJson(client, requestBody);
+            if (response.StatusCode == HttpStatusCode.TooManyRequests)
+            {
+                _logger.LogWarning("Rate limit hit, retrying after 2 seconds...");
+                response.Dispose();
+                await Task.Delay(2000);
+                response = await PostJson(client, requestBody);
+            }
+            return response;
+        }
+
+        private static Task<HttpResponseMessage> PostJson(HttpClient client, string body) =>
+            client.PostAsync(MistralEndpoint, new StringContent(body, Encoding.UTF8, "application/json"));
+
+        private static ChatMessage BuildMessage(string sessionId, string userId, string prompt, string markdown, string model) => new()
+        {
+            SessionId = sessionId,
+            UserId = userId,
+            UserPrompt = prompt,
+            ResponseMarkdown = markdown,
+            AiModel = model
+        };
+
         [HttpPost("NewChat")]
         [ValidateAntiForgeryToken]
         public IActionResult NewChat()
         {
-            var newId = Guid.NewGuid().ToString("N");
-            Response.Cookies.Append(SessionCookie, newId, new CookieOptions
-            {
-                Expires = DateTimeOffset.UtcNow.AddDays(30),
-                HttpOnly = true,
-                SameSite = SameSiteMode.Lax
-            });
-            return Redirect(Request.Headers["Referer"].ToString());
+            SetCookie(SessionCookie, Guid.NewGuid().ToString("N"), DateTimeOffset.UtcNow.AddDays(30));
+            return RedirectToReferer();
         }
 
-        /// Loads a past session by setting the session cookie to the requested ID.
         [HttpPost("LoadSession")]
         [ValidateAntiForgeryToken]
         public IActionResult LoadSession(string sessionId)
         {
-            var userId = GetOrCreateUserId();
+            if (!UserOwnsSession(sessionId))
+                return RedirectToReferer();
 
-            // Verify the session belongs to this user
-            var sessions = _chatHistory.GetAllSessions(userId);
-            if (!sessions.Any(s => s.SessionId == sessionId))
-                return Redirect(Request.Headers["Referer"].ToString());
-
-            Response.Cookies.Append(SessionCookie, sessionId, new CookieOptions
-            {
-                Expires = DateTimeOffset.UtcNow.AddDays(30),
-                HttpOnly = true,
-                SameSite = SameSiteMode.Lax
-            });
-            return Redirect(Request.Headers["Referer"].ToString());
+            SetCookie(SessionCookie, sessionId, DateTimeOffset.UtcNow.AddDays(30));
+            return RedirectToReferer();
         }
 
-        /// Deletes all messages in a session. If it was the active session, starts a new one.
         [HttpPost("DeleteSession")]
         [ValidateAntiForgeryToken]
         public IActionResult DeleteSession(string sessionId)
         {
-            var userId = GetOrCreateUserId();
-
-            // Verify ownership before deleting
-            var sessions = _chatHistory.GetAllSessions(userId);
-            if (!sessions.Any(s => s.SessionId == sessionId))
-                return Redirect(Request.Headers["Referer"].ToString());
+            if (!UserOwnsSession(sessionId))
+                return RedirectToReferer();
 
             _chatHistory.ClearSession(sessionId);
 
-            // If the deleted session was the active one, start fresh
             if (Request.Cookies[SessionCookie] == sessionId)
-            {
-                var newId = Guid.NewGuid().ToString("N");
-                Response.Cookies.Append(SessionCookie, newId, new CookieOptions
-                {
-                    Expires = DateTimeOffset.UtcNow.AddDays(30),
-                    HttpOnly = true,
-                    SameSite = SameSiteMode.Lax
-                });
-            }
+                SetCookie(SessionCookie, Guid.NewGuid().ToString("N"), DateTimeOffset.UtcNow.AddDays(30));
 
-            return Redirect(Request.Headers["Referer"].ToString());
+            return RedirectToReferer();
         }
+
+        private bool UserOwnsSession(string sessionId) =>
+            _chatHistory.GetAllSessions(GetOrCreateUserId()).Any(s => s.SessionId == sessionId);
     }
 }
