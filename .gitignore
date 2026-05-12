@@ -500,3 +500,6 @@ appsettings.Development.json
 # Visual Studio / Rider
 .vs/
 *.user
+
+# Claude Code local config
+.claude/
